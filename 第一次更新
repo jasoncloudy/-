@@ -1,0 +1,215 @@
+#include <REG52.H>
+#define uint unsigned int
+#define uchar unsigned char
+uchar code table[] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f}; //数码管位选
+uchar code table2[] = {0xbf, 0x86, 0xdb, 0xcf, 0xe6, 0xed, 0xfd, 0x87, 0xff, 0xef};
+uchar code weixuan[] = {0xdf, 0xef, 0xf7, 0xfb, 0xfd, 0xfe}; //1,2,3,4,5,6个数码管的位选
+uint sec = 0;                                                //秒
+uint n = 0;                                                  //计数
+uint sec0 = 0;
+uint sec1 = 0;
+uint min0 = 0;
+uint min1 = 0;
+uint hour0 = 0;
+uint hour1 = 0;
+// uint date[6]={0,0,0,0,0,0};//定义一个有6个地址的数组，分别存时、分、秒的各位和十位
+sbit dula = P2 ^ 6; //段选口
+sbit wela = P2 ^ 7; //位选口
+sbit S2 = P3 ^ 4;
+sbit S3 = P3 ^ 5;
+sbit S4 = P3 ^ 6;
+sbit S5 = P3 ^ 7;
+uint flag = 0;
+uint num = 0;
+void delay(uint z) //延时函数
+{
+    uint x, y;
+    for (x = z; x > 0; x--)
+        for (y = 90; y > 0; y--)
+            ;
+}
+
+void write_address(uchar address) //打开位选,选择数码管
+{
+    wela = 1;     //打开位选
+    P0 = address; //传送地址数据
+    wela = 0;     //关闭位选
+}
+
+void write_date(uint n) //打开段选，写数据
+{
+    dula = 1;
+    P0 = table[n];
+    dula = 0;
+}
+void write_date1(uint n) //打开段选写数据
+{
+    dula = 1;
+    P0 = table2[n];
+    dula = 0;
+}
+void display(uint sec0, uint sec1, uint min0, uint min1, uint hour0, uint hour1) //数码管的动态显示
+{
+    write_date(sec0);    //送秒的个位
+    P0 = 0xff;           //消影
+    write_address(0xdf); //write_address(0xfe);//右边第一个数码管write_address(0xdf)
+    delay(1);
+
+    write_date(sec1);    //送秒的十位
+    P0 = 0xff;           //消影
+    write_address(0xef); //write_address(0xfd);//右边第一个数码管write_address(0xef)
+    delay(1);
+
+    write_date1(min0);   //送分的个位
+    P0 = 0xff;           //消影
+    write_address(0xf7); //write_address(0xfb);//右边第一个数码管write_address(0xf7)
+    delay(1);
+
+    write_date(min1);    //送分的十位
+    P0 = 0xff;           //消影
+    write_address(0xfb); //write_address(0xf7);//右边第一个数码管write_address(0xfb)
+    delay(1);
+
+    write_date1(hour0);  //送时的个位
+    P0 = 0xff;           //消影
+    write_address(0xfd); //write_address(0xef);//右边第一个数码管write_address(0xfd)
+    delay(1);
+
+    write_date(hour1);   //送时的十位
+    P0 = 0xff;           //消影
+    write_address(0xfe); //write_address(0xdf);//右边第一个数码管write_address(0xfe)
+    delay(1);
+}
+void time_init() //定时器初始函数
+{
+    TMOD = 0X01; //定时器工作在方式2
+    TH0 = (65535 - 45872) / 256;
+    TL0 = (65535 - 45872) % 256;
+    EA = 1;  //开总中断
+    ET0 = 1; //定时器0中断
+    TR0 = 1; //开定时器0
+}
+void Sscan()
+{
+    if (S2 == 0)
+    {
+        delay(10);
+        if (S2 == 0)
+        {
+            // min0=0;
+            min0++;
+            if (min0 > 9)
+            {
+                min0 = 0;
+            }
+            while (!S2)
+                ;
+        }
+    }
+    if (S3 == 0)
+    {
+        delay(10);
+        if (S3 == 0)
+        {
+            // min1=0;
+            min1++;
+            if (min1 == 6)
+            {
+                min1 = 0;
+            }
+            while (!S3)
+                ;
+        }
+    }
+    if (S4 == 0)
+    {
+        delay(10);
+        if (S4 == 0)
+        {
+            // hour0=0;
+            hour0++;
+            if (hour1 == 2 && hour0 == 4)
+            {
+                hour0 = 0;
+            }
+            else if ((hour1 == 0 || hour1 == 1) && hour0 > 9)
+            {
+                hour0 = 0;
+            }
+            while (!S4)
+                ;
+        }
+    }
+    if (S5 == 0)
+    {
+        delay(10);
+        if (S5 == 0)
+        {
+            hour1++;
+            if (hour1 >= 3)
+            {
+                hour1 = 0;
+            }
+            while (!S5)
+                ;
+        }
+    }
+}
+void main()
+{
+    dula = 0;
+    wela = 0;
+    time_init();
+    while (1)
+    {
+        Sscan();
+        display(sec0, sec1, min0, min1, hour0, hour1);
+    }
+}
+void timer() interrupt 1 //定时器0中断程序
+{
+    TH0 = (65535 - 45872) / 256;
+    TL0 = (65535 - 45872) % 256;
+    n++;
+    if (n == 20) //n是50毫秒
+    {
+        n = 0;
+        sec++;
+        if (sec == 60) //一分钟
+        {
+            sec = 0;
+            min0++;
+            if (min0 == 10) //一小时
+            {
+                min0 = 0;
+                min1++;
+                if (min1 == 6)
+                {
+                    min1 = 0;
+                    if (hour1 == 1 || hour1 == 0)
+                    {
+                        hour0++;
+                        if (hour0 == 10)
+                        {
+                            hour0 = 0;
+                            hour1++;
+                        }
+                    }
+                    else if (hour1 == 2)
+                    {
+                        hour0++;
+                        if (hour0 >= 4)
+                        {
+                            hour0 = 0;
+                            hour1 = 0;
+                            min1 = 0;
+                            min0 = 0;
+                        }
+                    }
+                }
+            }
+        }
+        sec0 = sec % 10;
+        sec1 = sec / 10;
+    }
+}
